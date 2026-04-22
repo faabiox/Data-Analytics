@@ -1,0 +1,44 @@
+/*
+===============================================================================
+Project: Last-Mile Delivery Claims Analysis
+Description: Extracts and transforms operational claims data, generating 
+             weekly/monthly cohorts and mapping them to specific routing hubs.
+Dialect: Google BigQuery (Standard SQL)
+Note: Table names, region codes, and facility IDs have been anonymized.
+===============================================================================
+*/
+
+WITH claims_base AS (
+    SELECT
+        claims.*,
+        
+        -- Time/Date transformations for cohort analysis and BI aggregation
+        DATE_TRUNC(claims.claim_opened_dt, WEEK(SUNDAY))                                         AS claim_week_start_dt,
+        CONCAT('W', CAST(CAST(FORMAT_DATE('%U', claims.claim_opened_dt) AS INT64) + 1 AS STRING)) AS claim_week_label,
+        DATE_TRUNC(claims.claim_opened_dt, MONTH)                                                 AS claim_month_start_dt,
+
+        -- Logistics identifiers
+        routes.route_id,
+        routes.origin_facility_id,
+        COALESCE(NULLIF(routes.destination_facility_id, ''), 'DEFAULT_SVC') AS destination_facility_id
+
+    FROM `project-name.logistics_dataset.customer_claims` AS claims
+    INNER JOIN `project-name.logistics_dataset.route_operations` AS routes 
+        ON claims.route_id = routes.route_id
+        
+    WHERE
+        claims.region_code = 'REGION_BR' -- Anonymized Region (e.g., Brazil)
+        
+        -- Filtering by specific strategic operational hubs (Anonymized IDs)
+        AND routes.origin_facility_id IN (
+            'HUB_NE_01', 'HUB_NE_02', 'HUB_NE_03', 'HUB_NE_04', 'HUB_NE_05', 
+            'HUB_NE_06', 'HUB_NE_07', 'HUB_NE_08', 'HUB_NE_09', 'HUB_NO_01', 
+            'HUB_NO_02', 'HUB_NO_03', 'HUB_NO_04', 'HUB_NO_05'
+        )
+        
+        -- Dynamic filter for the current year
+        AND EXTRACT(YEAR FROM claims.claim_opened_dt) = EXTRACT(YEAR FROM CURRENT_DATE)
+)
+
+SELECT * 
+FROM claims_base;
